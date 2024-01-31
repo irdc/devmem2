@@ -40,9 +40,6 @@
 #include <sys/mman.h>
 #include <err.h>
 
-#define MAP_SIZE 4096UL
-#define MAP_MASK (MAP_SIZE - 1)
-
 int
 main(int argc, char **argv)
 {
@@ -51,6 +48,7 @@ main(int argc, char **argv)
 	unsigned long read_result, writeval;
 	off_t target;
 	int access_type = 'w';
+	long page_size;
 
 	if (argc < 2) {
 		fprintf(stderr, "\nUsage:\t%s { address } [ type [ data ] ]\n"
@@ -60,6 +58,7 @@ main(int argc, char **argv)
 			argv[0]);
 		exit(1);
 	}
+	page_size = sysconf(_SC_PAGESIZE);
 	target = strtoul(argv[1], 0, 0);
 
 	if (argc > 2)
@@ -70,14 +69,14 @@ main(int argc, char **argv)
 	printf("/dev/mem opened.\n");
 	fflush(stdout);
 
-	/* Map one page */
-	map_base = mmap(0, MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, target & ~MAP_MASK);
+	/* Map two pages */
+	map_base = mmap(0, page_size * 2, PROT_READ | PROT_WRITE, MAP_SHARED, fd, target & ~(page_size - 1));
 	if (map_base == MAP_FAILED)
 		err(1, "mmap");
 	printf("Memory mapped at address %p.\n", map_base);
 	fflush(stdout);
 
-	virt_addr = map_base + (target & MAP_MASK);
+	virt_addr = map_base + (target & (page_size - 1));
 	switch (access_type) {
 	case 'b':
 		read_result = *((unsigned char *) virt_addr);
@@ -115,7 +114,7 @@ main(int argc, char **argv)
 		fflush(stdout);
 	}
 
-	if (munmap(map_base, MAP_SIZE) == -1)
+	if (munmap(map_base, page_size * 2) == -1)
 		err(1, "munmap");
 	close(fd);
 	return 0;
