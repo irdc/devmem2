@@ -39,28 +39,33 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <err.h>
+#include <inttypes.h>
 
 int
 main(int argc, char **argv)
 {
 	int fd;
 	void *map_base, *virt_addr;
-	unsigned long read_result, writeval;
+	unsigned long long writeval;
 	off_t target;
 	int access_type = 'w';
 	long page_size;
 
 	if (argc < 2) {
-		fprintf(stderr, "\nUsage:\t%s { address } [ type [ data ] ]\n"
-			"\taddress : memory address to act upon\n"
-			"\ttype    : access operation type : [b]yte, [h]alfword, [w]ord\n"
-			"\tdata    : data to be written\n\n",
+		fprintf(stderr, "usage: %s address [type [data]]\n"
+			"  address  memory address to act upon\n"
+			"  type     access operation type\n"
+			"            b  byte (8 bit)\n"
+			"            h  halfword (16 bit)\n"
+			"            w  word (32 bit)\n"
+			"            d  doubleword (64 bit)\n"
+			"  data     data to write\n",
 			argv[0]);
 		exit(1);
 	}
 	page_size = sysconf(_SC_PAGESIZE);
 	setvbuf(stdout, NULL, _IONBF, 0);
-	target = strtoul(argv[1], 0, 0);
+	target = strtoull(argv[1], 0, 0);
 
 	if (argc > 2)
 		access_type = tolower(argv[2][0]);
@@ -72,42 +77,60 @@ main(int argc, char **argv)
 	map_base = mmap(0, page_size * 2, PROT_READ | PROT_WRITE, MAP_SHARED, fd, target & ~(page_size - 1));
 	if (map_base == MAP_FAILED)
 		err(1, "mmap");
-	printf("0x%x: ", target);
+	printf("0x%" PRIx64 ": ", (uint64_t) target);
 
 	virt_addr = map_base + (target & (page_size - 1));
 	switch (access_type) {
+#define READ(type, format) \
+	do { \
+		type value; \
+		memcpy(&value, virt_addr, sizeof(value)); \
+		printf(format, value); \
+	} while (0)
+
 	case 'b':
-		read_result = *((unsigned char *) virt_addr);
+		READ(uint8_t, "0x%02" PRIx8);
 		break;
 	case 'h':
-		read_result = *((unsigned short *) virt_addr);
+		READ(uint16_t, "0x%04" PRIx16);
 		break;
 	case 'w':
-		read_result = *((unsigned long *) virt_addr);
+		READ(uint32_t, "0x%08" PRIx32);
+		break;
+	case 'd':
+		READ(uint64_t, "0x%016" PRIx64);
 		break;
 	default:
 		fprintf(stderr, "Illegal data type '%c'.\n", access_type);
 		exit(2);
 	}
-	printf("0x%x", read_result);
 
 	if (argc > 3) {
-		writeval = strtoul(argv[3], 0, 0);
+		writeval = strtoull(argv[3], 0, 0);
 		switch (access_type) {
+#define WRITE(type, format) \
+	do { \
+		printf(" -> " format " -> ", (type) writeval); \
+		*((volatile type *) virt_addr) = writeval; \
+	} while (0)
+
 		case 'b':
-			*((unsigned char *) virt_addr) = writeval;
-			read_result = *((unsigned char *) virt_addr);
+			WRITE(uint8_t, "0x%02" PRIx8);
+			READ(uint8_t, "0x%02" PRIx8);
 			break;
 		case 'h':
-			*((unsigned short *) virt_addr) = writeval;
-			read_result = *((unsigned short *) virt_addr);
+			WRITE(uint16_t, "0x%04" PRIx16);
+			READ(uint16_t, "0x%04" PRIx16);
 			break;
 		case 'w':
-			*((unsigned long *) virt_addr) = writeval;
-			read_result = *((unsigned long *) virt_addr);
+			WRITE(uint32_t, "0x%08" PRIx32);
+			READ(uint32_t, "0x%08" PRIx32);
+			break;
+		case 'd':
+			WRITE(uint64_t, "0x%016" PRIx64);
+			READ(uint64_t, "0x%016" PRIx64);
 			break;
 		}
-		printf(" -> 0x%x -> 0x%x", writeval, read_result);
 	}
 	printf("\n");
 
