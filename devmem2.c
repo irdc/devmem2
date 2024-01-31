@@ -38,9 +38,7 @@
 #include <termios.h>
 #include <sys/types.h>
 #include <sys/mman.h>
-
-#define FATAL do { fprintf(stderr, "Error at line %d, file %s (%d) [%s]\n", \
-  __LINE__, __FILE__, errno, strerror(errno)); exit(1); } while(0)
+#include <err.h>
 
 #define MAP_SIZE 4096UL
 #define MAP_MASK (MAP_SIZE - 1)
@@ -68,14 +66,14 @@ main(int argc, char **argv)
 		access_type = tolower(argv[2][0]);
 
 	if ((fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1)
-		FATAL;
+		err(1, "/dev/mem");
 	printf("/dev/mem opened.\n");
 	fflush(stdout);
 
 	/* Map one page */
 	map_base = mmap(0, MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, target & ~MAP_MASK);
-	if (map_base == (void *) -1)
-		FATAL;
+	if (map_base == MAP_FAILED)
+		err(1, "mmap");
 	printf("Memory mapped at address %p.\n", map_base);
 	fflush(stdout);
 
@@ -118,7 +116,7 @@ main(int argc, char **argv)
 	}
 
 	if (munmap(map_base, MAP_SIZE) == -1)
-		FATAL;
+		err(1, "munmap");
 	close(fd);
 	return 0;
 }
