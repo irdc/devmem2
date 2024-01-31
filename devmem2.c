@@ -59,6 +59,7 @@ main(int argc, char **argv)
 		exit(1);
 	}
 	page_size = sysconf(_SC_PAGESIZE);
+	setvbuf(stdout, NULL, _IONBF, 0);
 	target = strtoul(argv[1], 0, 0);
 
 	if (argc > 2)
@@ -66,15 +67,12 @@ main(int argc, char **argv)
 
 	if ((fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1)
 		err(1, "/dev/mem");
-	printf("/dev/mem opened.\n");
-	fflush(stdout);
 
 	/* Map two pages */
 	map_base = mmap(0, page_size * 2, PROT_READ | PROT_WRITE, MAP_SHARED, fd, target & ~(page_size - 1));
 	if (map_base == MAP_FAILED)
 		err(1, "mmap");
-	printf("Memory mapped at address %p.\n", map_base);
-	fflush(stdout);
+	printf("0x%x: ", target);
 
 	virt_addr = map_base + (target & (page_size - 1));
 	switch (access_type) {
@@ -91,8 +89,7 @@ main(int argc, char **argv)
 		fprintf(stderr, "Illegal data type '%c'.\n", access_type);
 		exit(2);
 	}
-	printf("Value at address 0x%X (%p): 0x%X\n", target, virt_addr, read_result);
-	fflush(stdout);
+	printf("0x%x", read_result);
 
 	if (argc > 3) {
 		writeval = strtoul(argv[3], 0, 0);
@@ -110,9 +107,9 @@ main(int argc, char **argv)
 			read_result = *((unsigned long *) virt_addr);
 			break;
 		}
-		printf("Written 0x%X; readback 0x%X\n", writeval, read_result);
-		fflush(stdout);
+		printf(" -> 0x%x -> 0x%x", writeval, read_result);
 	}
+	printf("\n");
 
 	if (munmap(map_base, page_size * 2) == -1)
 		err(1, "munmap");
